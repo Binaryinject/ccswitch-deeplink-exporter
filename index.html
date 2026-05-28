@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CC Switch Deeplink Exporter</title>
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>CC Switch Deeplink Exporter</h1>
+            <p class="subtitle">一键导出所有供应商的 deeplink</p>
+        </header>
+
+        <div class="toolbar">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all">全部</button>
+                <button class="filter-btn" data-filter="claude">Claude</button>
+                <button class="filter-btn" data-filter="codex">Codex</button>
+                <button class="filter-btn" data-filter="gemini">Gemini</button>
+                <button class="filter-btn" data-filter="skill">Skills</button>
+            </div>
+            <div class="action-group">
+                <button id="btn-copy-all" class="btn btn-accent">复制所有链接</button>
+                <button id="btn-export" class="btn btn-secondary">导出 HTML</button>
+                <button id="btn-refresh" class="btn btn-primary">刷新</button>
+            </div>
+        </div>
+
+        <div id="db-path" class="db-path"></div>
+
+        <div id="stats" class="stats"></div>
+
+        <div id="card-list" class="card-list">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast hidden"></div>
+
+    <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

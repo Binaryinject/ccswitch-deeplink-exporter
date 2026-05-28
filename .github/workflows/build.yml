@@ -49,6 +49,7 @@ jobs:
           args: ${{ matrix.bundle_args }}
 
       - name: List build output
+        shell: bash
         run: find src-tauri/target/release/bundle -type f
 
       - name: Upload artifact

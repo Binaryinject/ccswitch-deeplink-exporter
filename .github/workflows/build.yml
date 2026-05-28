@@ -62,11 +62,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Find DMG file
+        id: dmg
+        run: echo "path=$(find src-tauri/target/release/bundle/dmg -name '*.dmg' | head -1)" >> $GITHUB_OUTPUT
+
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
-          path: src-tauri/target/release/bundle/dmg/
+          path: ${{ steps.dmg.outputs.path }}
 
   release:
     needs: [build-windows, build-macos]

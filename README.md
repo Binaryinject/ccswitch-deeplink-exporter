@@ -1,6 +1,12 @@
-# CC Switch Deeplink Exporter
+<p align="center">
+  <img src="src-tauri/icons/icon.png" width="128" alt="CC Switch Deeplink Exporter">
+</p>
 
-[English](#english) | [中文](#中文)
+<h1 align="center">CC Switch Deeplink Exporter</h1>
+
+<p align="center">
+  <a href="#english">English</a> | <a href="#中文">中文</a>
+</p>
 
 ---
 

@@ -21,7 +21,7 @@ jobs:
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-dmg
-            bundle_args: "--bundles dmg"
+            bundle_args: ""
 
     runs-on: ${{ matrix.os }}
 

@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use base64::Engine;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};

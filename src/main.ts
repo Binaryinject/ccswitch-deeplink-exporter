@@ -12,15 +12,22 @@ interface DeeplinkItem {
 
 let allItems: DeeplinkItem[] = [];
 
-// DOM
-const cardList = document.getElementById("card-list")!;
-const statsEl = document.getElementById("stats")!;
-const dbPathEl = document.getElementById("db-path")!;
-const toastEl = document.getElementById("toast")!;
-const btnCopyAll = document.getElementById("btn-copy-all")!;
-const btnExport = document.getElementById("btn-export")!;
-const btnRefresh = document.getElementById("btn-refresh")!;
+const $ = (id: string) => document.getElementById(id)!;
+const cardList = $("card-list");
+const statsEl = $("stats");
+const dbPathEl = $("db-path");
+const toastEl = $("toast");
+const btnCopyAll = $("btn-copy-all");
+const btnExport = $("btn-export");
+const btnRefresh = $("btn-refresh");
 const filterBtns = document.querySelectorAll<HTMLButtonElement>(".filter-btn");
+
+const BADGE_MAP: Record<string, string> = {
+  claude: "badge-claude",
+  codex: "badge-codex",
+  gemini: "badge-gemini",
+  skill: "badge-skill",
+};
 
 function showToast(msg: string) {
   toastEl.textContent = msg;
@@ -29,19 +36,8 @@ function showToast(msg: string) {
 }
 
 async function copyToClipboard(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast("已复制!");
-  } catch {
-    // fallback
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand("copy");
-    document.body.removeChild(ta);
-    showToast("已复制!");
-  }
+  await navigator.clipboard.writeText(text);
+  showToast("已复制!");
 }
 
 function escapeHtml(s: string): string {
@@ -51,13 +47,38 @@ function escapeHtml(s: string): string {
 }
 
 function badgeClass(app: string): string {
-  switch (app) {
-    case "claude": return "badge-claude";
-    case "codex": return "badge-codex";
-    case "gemini": return "badge-gemini";
-    case "skill": return "badge-skill";
-    default: return "";
-  }
+  return BADGE_MAP[app] ?? "";
+}
+
+function renderCard(item: DeeplinkItem, idx: number | null, exportMode: boolean): string {
+  const app = item.item_type === "skill" ? "skill" : item.app;
+  const label = item.item_type === "skill" ? "Skill" : item.app;
+  const meta = [
+    item.endpoint ? `<span>端点: ${escapeHtml(item.endpoint)}</span>` : "",
+    item.model ? `<span>${item.item_type === "skill" ? "" : "模型: "}${escapeHtml(item.model)}</span>` : "",
+  ].filter(Boolean).join("");
+
+  const copyBtn = exportMode
+    ? `<button class="btn-copy" onclick="navigator.clipboard.writeText('${escapeHtml(item.deeplink.replace(/'/g, "\\'"))}').then(()=>{this.textContent='已复制!';setTimeout(()=>this.textContent='复制链接',1500)})">复制链接</button>`
+    : `<button class="btn-copy" data-idx="${idx}">复制链接</button>`;
+
+  return `
+    <div class="card" data-app="${escapeHtml(app)}">
+      <div class="card-head">
+        <span class="badge ${badgeClass(app)}">${escapeHtml(label)}</span>
+        <span class="card-name">${escapeHtml(item.name)}</span>
+        ${item.is_current ? '<span class="card-current">当前</span>' : ""}
+      </div>
+      <div class="card-meta">${meta}</div>
+      <div class="card-actions">
+        <a href="${escapeHtml(item.deeplink)}" class="btn-import">导入到 CC Switch</a>
+        ${copyBtn}
+      </div>
+      <details class="card-link">
+        <summary>查看完整链接</summary>
+        <div class="link-url">${escapeHtml(item.deeplink)}</div>
+      </details>
+    </div>`;
 }
 
 function renderCards(items: DeeplinkItem[]) {
@@ -66,39 +87,11 @@ function renderCards(items: DeeplinkItem[]) {
     return;
   }
 
-  cardList.innerHTML = items
-    .map(
-      (item, i) => `
-    <div class="card" data-app="${escapeHtml(item.item_type === "skill" ? "skill" : item.app)}">
-      <div class="card-head">
-        <span class="badge ${badgeClass(item.item_type === "skill" ? "skill" : item.app)}">
-          ${escapeHtml(item.item_type === "skill" ? "Skill" : item.app)}
-        </span>
-        <span class="card-name">${escapeHtml(item.name)}</span>
-        ${item.is_current ? '<span class="card-current">当前</span>' : ""}
-      </div>
-      <div class="card-meta">
-        ${item.endpoint ? `<span>端点: ${escapeHtml(item.endpoint)}</span>` : ""}
-        ${item.model ? `<span>${item.item_type === "skill" ? "" : "模型: "}${escapeHtml(item.model)}</span>` : ""}
-      </div>
-      <div class="card-actions">
-        <a href="${escapeHtml(item.deeplink)}" class="btn-import">导入到 CC Switch</a>
-        <button class="btn-copy" data-idx="${i}">复制链接</button>
-      </div>
-      <details class="card-link">
-        <summary>查看完整链接</summary>
-        <div class="link-url">${escapeHtml(item.deeplink)}</div>
-      </details>
-    </div>
-  `
-    )
-    .join("");
+  cardList.innerHTML = items.map((item, i) => renderCard(item, i, false)).join("");
 
-  // Bind copy buttons
   cardList.querySelectorAll<HTMLButtonElement>(".btn-copy").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const idx = parseInt(btn.dataset.idx!, 10);
-      copyToClipboard(allItems[idx].deeplink);
+      copyToClipboard(items[parseInt(btn.dataset.idx!, 10)].deeplink);
     });
   });
 }
@@ -107,12 +100,11 @@ function renderStats(items: DeeplinkItem[]) {
   const providers = items.filter((i) => i.item_type === "provider");
   const skills = items.filter((i) => i.item_type === "skill");
   const apps = new Set(providers.map((p) => p.app));
-
-  statsEl.innerHTML = `
-    <div class="stat"><div class="num">${providers.length}</div><div class="label">供应商</div></div>
-    <div class="stat"><div class="num">${skills.length}</div><div class="label">Skills</div></div>
-    <div class="stat"><div class="num">${apps.size}</div><div class="label">应用类型</div></div>
-  `;
+  statsEl.innerHTML = [
+    [providers.length, "供应商"],
+    [skills.length, "Skills"],
+    [apps.size, "应用类型"],
+  ].map(([n, l]) => `<div class="stat"><div class="num">${n}</div><div class="label">${l}</div></div>`).join("");
 }
 
 function filterItems(filter: string): DeeplinkItem[] {
@@ -123,11 +115,8 @@ function filterItems(filter: string): DeeplinkItem[] {
 
 async function loadData() {
   cardList.innerHTML = '<div class="loading">加载中...</div>';
-
   try {
-    const dbPath = await invoke<string>("get_db_path_str");
-    dbPathEl.textContent = dbPath;
-
+    dbPathEl.textContent = await invoke<string>("get_db_path_str");
     allItems = await invoke<DeeplinkItem[]>("load_deeplinks");
     renderStats(allItems);
     renderCards(allItems);
@@ -137,61 +126,50 @@ async function loadData() {
   }
 }
 
-// Filter buttons
 filterBtns.forEach((btn) => {
   btn.addEventListener("click", () => {
     filterBtns.forEach((b) => b.classList.remove("active"));
     btn.classList.add("active");
-    const filter = btn.dataset.filter!;
-    renderCards(filterItems(filter));
+    renderCards(filterItems(btn.dataset.filter!));
   });
 });
 
-// Copy all
 btnCopyAll.addEventListener("click", () => {
-  const links = allItems.map((i) => i.deeplink).join("\n");
-  copyToClipboard(links);
+  copyToClipboard(allItems.map((i) => i.deeplink).join("\n"));
 });
 
-// Export HTML
 btnExport.addEventListener("click", () => {
   const html = generateExportHtml(allItems);
-  const blob = new Blob([html], { type: "text/html" });
-  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
+  a.href = URL.createObjectURL(new Blob([html], { type: "text/html" }));
   a.download = "ccswitch-deeplinks.html";
   a.click();
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(a.href);
   showToast("已导出 HTML");
 });
 
-// Refresh
-btnRefresh.addEventListener("click", () => {
-  loadData();
-});
+btnRefresh.addEventListener("click", () => loadData());
 
 function generateExportHtml(items: DeeplinkItem[]): string {
   const providers = items.filter((i) => i.item_type === "provider");
   const skills = items.filter((i) => i.item_type === "skill");
-  const allLinksJson = JSON.stringify(items.map((i) => i.deeplink));
   const now = new Date().toLocaleString("zh-CN");
 
-  const cards = items
-    .map((item) => {
-      const badgeCls = badgeClass(item.item_type === "skill" ? "skill" : item.app);
-      const label = item.item_type === "skill" ? "Skill" : item.app;
-      const current = item.is_current ? " <span style='color:#27ae60;font-size:11px;'>(当前)</span>" : "";
-      return `
-      <div class="card" data-app="${item.item_type === "skill" ? "skill" : item.app}">
+  const cards = items.map((item) => {
+    const current = item.is_current ? " <span style='color:#27ae60;font-size:11px;'>(当前)</span>" : "";
+    const app = item.item_type === "skill" ? "skill" : item.app;
+    const label = item.item_type === "skill" ? "Skill" : item.app;
+    const meta = [
+      item.endpoint ? `<span>端点: ${escapeHtml(item.endpoint)}</span>` : "",
+      item.model ? `<span>${escapeHtml(item.model)}</span>` : "",
+    ].filter(Boolean).join("");
+    return `
+      <div class="card" data-app="${app}">
         <div class="card-head">
-          <span class="badge ${badgeCls}">${escapeHtml(label)}</span>
+          <span class="badge ${badgeClass(app)}">${escapeHtml(label)}</span>
           <span class="card-name">${escapeHtml(item.name)}${current}</span>
         </div>
-        <div class="card-meta">
-          ${item.endpoint ? `<span>端点: ${escapeHtml(item.endpoint)}</span>` : ""}
-          ${item.model ? `<span>${escapeHtml(item.model)}</span>` : ""}
-        </div>
+        <div class="card-meta">${meta}</div>
         <div class="card-actions">
           <a href="${escapeHtml(item.deeplink)}" class="btn-import">导入到 CC Switch</a>
           <button class="btn-copy" onclick="navigator.clipboard.writeText('${escapeHtml(item.deeplink.replace(/'/g, "\\'"))}').then(()=>{this.textContent='已复制!';setTimeout(()=>this.textContent='复制链接',1500)})">复制链接</button>
@@ -201,8 +179,7 @@ function generateExportHtml(items: DeeplinkItem[]): string {
           <div class="link-url">${escapeHtml(item.deeplink)}</div>
         </details>
       </div>`;
-    })
-    .join("");
+  }).join("");
 
   return `<!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
@@ -247,12 +224,11 @@ ${cards}
 </div>
 <div id="toast" class="toast hidden"></div>
 <script>
-const allLinks=${allLinksJson};
+const allLinks=${JSON.stringify(items.map((i) => i.deeplink))};
 function copyAll(){navigator.clipboard.writeText(allLinks.join('\\n')).then(()=>showToast('已复制 '+allLinks.length+' 个链接!'))}
 function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2000)}
 function filter(app,btn){document.querySelectorAll('.toolbar button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.card').forEach(c=>{c.style.display=(app==='all'||c.dataset.app===app)?'':'none'})}
 </script></body></html>`;
 }
 
-// Init
 loadData();

@@ -104,7 +104,8 @@ fn build_query(params: &[(&str, &str)]) -> String {
 }
 
 fn build_provider_deeplink(p: &Provider) -> String {
-    let config = p.settings_config.as_ref().unwrap_or(&serde_json::Value::Object(Default::default()));
+    let default_config = serde_json::Value::Object(Default::default());
+    let config = p.settings_config.as_ref().unwrap_or(&default_config);
     let config_b64 = base64::engine::general_purpose::STANDARD.encode(
         serde_json::to_string(config).unwrap_or_default().as_bytes(),
     );

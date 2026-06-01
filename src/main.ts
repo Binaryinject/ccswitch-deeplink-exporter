@@ -35,9 +35,18 @@ function showToast(msg: string) {
   setTimeout(() => toastEl.classList.add("hidden"), 2000);
 }
 
-async function copyToClipboard(text: string) {
-  await navigator.clipboard.writeText(text);
-  showToast("已复制!");
+function copyToClipboard(text: string) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "-9999px";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(ta);
+  showToast(ok ? "已复制!" : "复制失败");
 }
 
 function escapeHtml(s: string): string {
@@ -59,7 +68,7 @@ function renderCard(item: DeeplinkItem, idx: number | null, exportMode: boolean)
   ].filter(Boolean).join("");
 
   const copyBtn = exportMode
-    ? `<button class="btn-copy" onclick="navigator.clipboard.writeText('${escapeHtml(item.deeplink.replace(/'/g, "\\'"))}').then(()=>{this.textContent='已复制!';setTimeout(()=>this.textContent='复制链接',1500)})">复制链接</button>`
+    ? `<button class="btn-copy" data-link="${escapeHtml(item.deeplink)}">复制链接</button>`
     : `<button class="btn-copy" data-idx="${idx}">复制链接</button>`;
 
   return `
@@ -225,9 +234,11 @@ ${cards}
 <div id="toast" class="toast hidden"></div>
 <script>
 const allLinks=${JSON.stringify(items.map((i) => i.deeplink))};
-function copyAll(){navigator.clipboard.writeText(allLinks.join('\\n')).then(()=>showToast('已复制 '+allLinks.length+' 个链接!'))}
-function showToast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(()=>t.classList.add('hidden'),2000)}
-function filter(app,btn){document.querySelectorAll('.toolbar button').forEach(b=>b.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.card').forEach(c=>{c.style.display=(app==='all'||c.dataset.app===app)?'':'none'})}
+function copyToClipboard(t){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.left='-9999px';a.style.top='-9999px';document.body.appendChild(a);a.focus();a.select();var ok=document.execCommand('copy');document.body.removeChild(a);showToast(ok?'已复制!':'复制失败')}
+function copyAll(){copyToClipboard(allLinks.join('\\n'));showToast('已复制 '+allLinks.length+' 个链接!')}
+function showToast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},2000)}
+function filter(app,btn){document.querySelectorAll('.toolbar button').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');document.querySelectorAll('.card').forEach(function(c){c.style.display=(app==='all'||c.dataset.app===app)?'':'none'})}
+document.querySelectorAll('.btn-copy[data-link]').forEach(function(btn){btn.addEventListener('click',function(){copyToClipboard(this.dataset.link);this.textContent='已复制!';var b=this;setTimeout(function(){b.textContent='复制链接'},1500)})});
 </script></body></html>`;
 }
 

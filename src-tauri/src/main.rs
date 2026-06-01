@@ -214,10 +214,118 @@ fn get_db_path_str() -> Result<String, String> {
     Ok(db_path.to_string_lossy().to_string())
 }
 
+const REPO: &str = "Binaryinject/ccswitch-deeplink-exporter";
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GitHubAsset {
+    name: String,
+    browser_download_url: String,
+    size: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct GitHubRelease {
+    tag_name: String,
+    name: String,
+    body: Option<String>,
+    assets: Vec<GitHubAsset>,
+}
+
+#[derive(Debug, Serialize)]
+struct UpdateInfo {
+    has_update: bool,
+    current_version: String,
+    latest_version: String,
+    release_notes: String,
+    download_url: String,
+    asset_name: String,
+}
+
+#[tauri::command]
+async fn check_update() -> Result<UpdateInfo, String> {
+    let url = format!("https://api.github.com/repos/{}/releases/latest", REPO);
+    let client = reqwest::Client::builder()
+        .user_agent("ccswitch-deeplink-exporter")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+    let release: GitHubRelease = resp.json().await.map_err(|e| e.to_string())?;
+
+    let latest = release.tag_name.trim_start_matches('v').to_string();
+    let has_update = latest != CURRENT_VERSION;
+
+    let windows_asset = release.assets.iter().find(|a| a.name.ends_with(".exe") && !a.name.ends_with(".dmg.exe"));
+    let macos_asset = release.assets.iter().find(|a| a.name.ends_with(".dmg"));
+
+    #[cfg(target_os = "windows")]
+    let platform_asset = windows_asset.or(macos_asset);
+    #[cfg(target_os = "macos")]
+    let platform_asset = macos_asset.or(windows_asset);
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let platform_asset = release.assets.first();
+
+    let (download_url, asset_name) = match platform_asset {
+        Some(a) => (a.browser_download_url.clone(), a.name.clone()),
+        None => (String::new(), String::new()),
+    };
+
+    Ok(UpdateInfo {
+        has_update,
+        current_version: CURRENT_VERSION.to_string(),
+        latest_version: latest,
+        release_notes: release.body.unwrap_or_default(),
+        download_url,
+        asset_name,
+    })
+}
+
+#[tauri::command]
+async fn download_and_install(url: String, asset_name: String) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .user_agent("ccswitch-deeplink-exporter")
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+
+    let download_dir = dirs::download_dir().or_else(|| dirs::home_dir()).ok_or("无法找到下载目录")?;
+    let dest = download_dir.join(&asset_name);
+
+    let mut file = tokio::fs::File::create(&dest).await.map_err(|e| e.to_string())?;
+    let mut content = resp.bytes().await.map_err(|e| e.to_string())?;
+    tokio::io::AsyncWriteExt::write_all(&mut file, &mut content).await.map_err(|e| e.to_string())?;
+
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &dest.to_string_lossy()])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(&dest)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(dest.to_string_lossy().to_string())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![load_deeplinks, get_db_path_str])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![
+            load_deeplinks,
+            get_db_path_str,
+            check_update,
+            download_and_install,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

@@ -243,3 +243,58 @@ document.querySelectorAll('.btn-copy[data-link]').forEach(function(btn){btn.addE
 }
 
 loadData();
+checkForUpdate();
+
+async function checkForUpdate() {
+  try {
+    const info = await invoke<{
+      has_update: boolean;
+      current_version: string;
+      latest_version: string;
+      release_notes: string;
+      download_url: string;
+      asset_name: string;
+    }>("check_update");
+
+    if (!info.has_update) return;
+
+    const banner = $("update-banner");
+    banner.innerHTML = `
+      <div class="update-text">发现新版本 <strong>v${info.latest_version}</strong>（当前 v${info.current_version}）</div>
+      <div class="update-actions">
+        <button id="btn-download" class="btn-download">下载并安装</button>
+        <button id="btn-dismiss-update" class="btn-dismiss">稍后再说</button>
+      </div>
+    `;
+    banner.classList.remove("hidden");
+
+    $("btn-download").addEventListener("click", async () => {
+      const btn = $("btn-download") as HTMLButtonElement;
+      btn.disabled = true;
+      btn.textContent = "下载中...";
+
+      const progress = document.createElement("div");
+      progress.className = "update-progress";
+      progress.textContent = "正在下载安装包，请稍候...";
+      banner.appendChild(progress);
+
+      try {
+        const path = await invoke<string>("download_and_install", {
+          url: info.download_url,
+          assetName: info.asset_name,
+        });
+        progress.textContent = `下载完成，正在启动安装程序...`;
+      } catch (e: any) {
+        progress.textContent = `下载失败: ${typeof e === "string" ? e : e.message || "未知错误"}`;
+        btn.disabled = false;
+        btn.textContent = "重试";
+      }
+    });
+
+    $("btn-dismiss-update").addEventListener("click", () => {
+      banner.classList.add("hidden");
+    });
+  } catch {
+    // 版本检查失败，静默忽略
+  }
+}

@@ -59,7 +59,7 @@ function badgeClass(app: string): string {
   return BADGE_MAP[app] ?? "";
 }
 
-function renderCard(item: DeeplinkItem, idx: number | null, exportMode: boolean): string {
+function renderCard(item: DeeplinkItem, idx: number): string {
   const app = item.item_type === "skill" ? "skill" : item.app;
   const label = item.item_type === "skill" ? "Skill" : item.app;
   const meta = [
@@ -67,9 +67,7 @@ function renderCard(item: DeeplinkItem, idx: number | null, exportMode: boolean)
     item.model ? `<span>${item.item_type === "skill" ? "" : "模型: "}${escapeHtml(item.model)}</span>` : "",
   ].filter(Boolean).join("");
 
-  const copyBtn = exportMode
-    ? `<button class="btn-copy" data-link="${escapeHtml(item.deeplink)}">复制链接</button>`
-    : `<button class="btn-copy" data-idx="${idx}">复制链接</button>`;
+  const copyBtn = `<button class="btn-copy" data-idx="${idx}">复制链接</button>`;
 
   return `
     <div class="card" data-app="${escapeHtml(app)}">
@@ -96,7 +94,7 @@ function renderCards(items: DeeplinkItem[]) {
     return;
   }
 
-  cardList.innerHTML = items.map((item, i) => renderCard(item, i, false)).join("");
+  cardList.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
 
   cardList.querySelectorAll<HTMLButtonElement>(".btn-copy").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -181,7 +179,7 @@ function generateExportHtml(items: DeeplinkItem[]): string {
         <div class="card-meta">${meta}</div>
         <div class="card-actions">
           <a href="${escapeHtml(item.deeplink)}" class="btn-import">导入到 CC Switch</a>
-          <button class="btn-copy" onclick="navigator.clipboard.writeText('${escapeHtml(item.deeplink.replace(/'/g, "\\'"))}').then(()=>{this.textContent='已复制!';setTimeout(()=>this.textContent='复制链接',1500)})">复制链接</button>
+          <button class="btn-copy" data-idx="${items.indexOf(item)}" onclick="copyLink(this)">复制链接</button>
         </div>
         <details class="card-link">
           <summary>查看完整链接</summary>
@@ -236,9 +234,9 @@ ${cards}
 const allLinks=${JSON.stringify(items.map((i) => i.deeplink))};
 function copyToClipboard(t){var a=document.createElement('textarea');a.value=t;a.style.position='fixed';a.style.left='-9999px';a.style.top='-9999px';document.body.appendChild(a);a.focus();a.select();var ok=document.execCommand('copy');document.body.removeChild(a);showToast(ok?'已复制!':'复制失败')}
 function copyAll(){copyToClipboard(allLinks.join('\\n'));showToast('已复制 '+allLinks.length+' 个链接!')}
+function copyLink(btn){var i=parseInt(btn.dataset.idx,10);copyToClipboard(allLinks[i]);btn.textContent='已复制!';setTimeout(function(){btn.textContent='复制链接'},1500)}
 function showToast(m){var t=document.getElementById('toast');t.textContent=m;t.classList.remove('hidden');setTimeout(function(){t.classList.add('hidden')},2000)}
 function filter(app,btn){document.querySelectorAll('.toolbar button').forEach(function(b){b.classList.remove('active')});btn.classList.add('active');document.querySelectorAll('.card').forEach(function(c){c.style.display=(app==='all'||c.dataset.app===app)?'':'none'})}
-document.querySelectorAll('.btn-copy[data-link]').forEach(function(btn){btn.addEventListener('click',function(){copyToClipboard(this.dataset.link);this.textContent='已复制!';var b=this;setTimeout(function(){b.textContent='复制链接'},1500)})});
 </script></body></html>`;
 }
 
@@ -279,7 +277,7 @@ async function checkForUpdate() {
       banner.appendChild(progress);
 
       try {
-        const path = await invoke<string>("download_and_install", {
+        await invoke<string>("download_and_install", {
           url: info.download_url,
           assetName: info.asset_name,
         });
